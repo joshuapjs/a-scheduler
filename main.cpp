@@ -10,22 +10,33 @@ using std::vector;
 using namespace std::chrono_literals;
 
 class Scheduler {
-    vector<int> jobs;
+    vector<std::thread> jobs;
 
     public:
+
+    void handle_schedule() {
+        for (int i=0; i < jobs.size(); i++) {
+            if (jobs[i].joinable()) {
+                jobs[i].join();
+            }
+        }
+
+        jobs.clear();
+    }
 
     void schedule(job func, std::chrono::seconds delay) {
 
         const std::chrono::time_point<std::chrono::system_clock> now = 
             std::chrono::system_clock::now();
-
-        std::thread job_thread{ 
-                [func, delay, now](){
+        jobs.emplace_back( std::thread([func, delay, now](){
+                std::cout << "Job started" << std::endl;
                 std::this_thread::sleep_until(now + delay);
                 func();
                 }
-        };
+            )
+        );
     }
+
 };
 
 void test() {
@@ -56,9 +67,11 @@ int main() {
 
      Scheduler scheduler;
 
-     scheduler.schedule(&test, std::chrono::seconds(1));
-     scheduler.schedule(&test2, std::chrono::seconds(3));
-     scheduler.schedule(&test3, std::chrono::seconds(1));
+     scheduler.schedule(&test, std::chrono::seconds(5));
+     scheduler.schedule(&test2, std::chrono::seconds(1));
+     scheduler.schedule(&test3, std::chrono::seconds(10));
+
+     scheduler.handle_schedule();
 
      return 0;
 }
