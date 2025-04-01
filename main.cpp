@@ -14,6 +14,12 @@ class Scheduler {
 
     public:
 
+    /**
+     * @brief Handles all until the call of this method added to jobs.
+     *
+     * This method must be called last to make sure 
+     * threads / scheduled jobs are handled properly.
+     */
     void handle_schedule() {
         for (int i=0; i < jobs.size(); i++) {
             if (jobs[i].joinable()) {
@@ -24,8 +30,15 @@ class Scheduler {
         jobs.clear();
     }
 
+    /**
+     * @brief Creates a thread with a timer and adds it to the jobs vector.
+     *
+     * This method must be called to create a new job.
+     * 
+     * @param func A function pointer to a function that should executed.
+     * @param delay The delay of the call of the function.
+     */
     void schedule(job func, std::chrono::seconds delay) {
-
         const std::chrono::time_point<std::chrono::system_clock> now = 
             std::chrono::system_clock::now();
         jobs.emplace_back( std::thread([func, delay, now](){
@@ -36,7 +49,6 @@ class Scheduler {
             )
         );
     }
-
 };
 
 void test() {
@@ -65,6 +77,7 @@ int main() {
      const std::chrono::time_point<std::chrono::system_clock> now =
                  std::chrono::system_clock::now();
 
+     // Test the Scheduler class.
      Scheduler scheduler;
 
      scheduler.schedule(&test, std::chrono::seconds(5));
