@@ -5,9 +5,13 @@ project(a-scheduler VERSION 1.0
     DESCRIPTION "A scheduler in cpp"
                   LANGUAGES CXX)
 
+set(CMAKE_CXX_COMPILER "/usr/bin/g++")
+#find_package(Boost REQUIRED COMPONENTS filesystem system)
+
 add_executable(main main.cpp)
 
-add_library(boost INTERFACE)
-target_include_directories(boost INTERFACE /opt/homebrew/include)
+#if (Boost_FOUND)
+#    include_directories(${Boost_INCLUDE_DIRS})
+#    target_link_libraries(main ${Boost_LIBRARIES})
+#endif()
 
-target_link_libraries(main PRIVATE boost)

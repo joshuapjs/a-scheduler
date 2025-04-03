@@ -1,2 +1,6 @@
 .DS_*
 /build-dir
+/build
+/.vscode
+/main
+/main.*
