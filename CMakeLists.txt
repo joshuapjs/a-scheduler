@@ -1,4 +1,3 @@
-# This is my First CMake file. Cool stuff.
 set(CMAKE_CXX_STANDARD 20)
 cmake_minimum_required(VERSION 3.15...3.30)
 project(a-scheduler VERSION 1.0
