@@ -100,13 +100,13 @@ class AScheduler {
    * @brief Handles the initial scheduling of a recurring job.
    *
    * @param func: A Job.
-   * @param delay: A duration until the first run of the job.
-   * @param termination_point: The time point by when rescheduling schould
-   * finished. During all time points before this time point, beginning from the
-   * first scheduled run a rescheduling is possible. For a controlled end I
-   * would take a termination date near the last preferred execution.
+   * @param string_time: Time give as string.
+   * @param string_end: Time point given as a string indicating the last point
+   * of time execution.
    * @param period_id: Integer indicating if the recurrence should be hourly,
    * weekly, etc.
+   * @param waiting_period: The time we want to wait between two runs of a
+   * recurring job.
    */
   void schedule_recurring(job func, std::string string_time,
                           std::string string_end, int period_id,
@@ -183,8 +183,6 @@ class AScheduler {
    * @param periodic_jobs_vector: A reference to a vector that contains all
    * jobs that are to be repeated within a certain period, e.g. daily or
    * weekly.
-   * @param period: A std::chrono::<time period> element to indicate the waiting
-   * time to the first scheduled run.
    */
   void handle_recurring_vector(
       std::vector<RecurringJob>& periodic_jobs_vector) {
@@ -311,6 +309,39 @@ class AScheduler {
       std::this_thread::sleep_until(min_period);
       now = std::chrono::system_clock::now();
     }
+
+    // It appears that sometimes threads are not joined properly.
+    // At the end of the program I do not expect performance to be critical. I
+    // assume therefore that a clean up of all thread involved does not harm.
+    for (int i = 0; i < hourly_jobs.size(); i++) {
+      if (hourly_jobs[i].thread.joinable()) {
+        hourly_jobs[i].thread.join();
+      }
+    }
+
+    for (int i = 0; i < daily_jobs.size(); i++) {
+      if (daily_jobs[i].thread.joinable()) {
+        daily_jobs[i].thread.join();
+      }
+    }
+
+    for (int i = 0; i < weekly_jobs.size(); i++) {
+      if (weekly_jobs[i].thread.joinable()) {
+        weekly_jobs[i].thread.join();
+      }
+    }
+
+    for (int i = 0; i < monthly_jobs.size(); i++) {
+      if (monthly_jobs[i].thread.joinable()) {
+        monthly_jobs[i].thread.join();
+      }
+    }
+
+    for (int i = 0; i < yearly_jobs.size(); i++) {
+      if (yearly_jobs[i].thread.joinable()) {
+        yearly_jobs[i].thread.join();
+      }
+    }
   }
 
   /**
@@ -338,7 +369,7 @@ class AScheduler {
    * This method must be called to create a new job.
    *
    * @param func: A function pointer to the function that should executed.
-   * @param delay: The scheduled time for execution in string format
+   * @param string_time_point: The scheduled time for execution in string format
    * YYYY-MM-DDTHH:MM:SS
    */
   void schedule_at(job func, std::string string_time_point) {
@@ -357,7 +388,7 @@ class AScheduler {
    * This method must be called to create a new job.
    *
    * @param func: A function pointer to the function that should executed.
-   * @param delay: The scheduled time for execution in as
+   * @param scheduled_time: The scheduled time for execution in as
    * std::chrono::timepoint()
    */
   void schedule_at(job func,
@@ -377,6 +408,7 @@ class AScheduler {
    * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
+   * @param period_multiple: The amount of hours to wait between two runs of a job.
    */
   void schedule_hourly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
@@ -391,6 +423,7 @@ class AScheduler {
    * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
+   * @param period_multiple: The amount of hours to wait between two runs of a job.
    */
   void schedule_daily(job func, std::string string_time, std::string string_end,
                       int period_multiple) {
@@ -405,6 +438,7 @@ class AScheduler {
    * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
+   * @param period_multiple: The amount of hours to wait between two runs of a job.
    */
   void schedule_weekly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
@@ -419,6 +453,7 @@ class AScheduler {
    * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
+   * @param period_multiple: The amount of hours to wait between two runs of a job.
    */
   void schedule_monthly(job func, std::string string_time,
                         std::string string_end, int period_multiple) {
@@ -433,6 +468,7 @@ class AScheduler {
    * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
+   * @param period_multiple: The amount of hours to wait between two runs of a job.
    */
   void schedule_yearly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
