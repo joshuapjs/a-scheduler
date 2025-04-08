@@ -1,15 +1,17 @@
+#include <cassert>
 #include <chrono>
 #include <ctime>
 #include <format>
 #include <iomanip>
 #include <iostream>
 #include <locale>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
-#include <typeinfo>
 #include <vector>
 
+#define assert(exp)
 using std::vector;
 
 using namespace std::chrono_literals;
@@ -22,6 +24,7 @@ struct RecurringJob {
   std::thread thread;
   system_clock::time_point termination_point;
   system_clock::time_point scheduled_date;
+  microseconds waiting_period;
   void (*recurring_job)();
 };
 
@@ -74,6 +77,8 @@ class AScheduler {
    */
   system_clock::time_point min_period;
 
+  std::mutex m;
+
   /**
    * @brief helper method to parse time leaning on ISO 8601 while the time zone
    * and offset is omitted.
@@ -109,12 +114,35 @@ class AScheduler {
    * @param period_id: Integer indicating if the recurrence should be hourly,
    * weekly, etc.
    */
-  void schedule_recurring(job func, microseconds delay,
-                          time_point<system_clock> termination_point,
-                          int period_id) {
+  void schedule_recurring(job func, std::string string_time,
+                          std::string string_end, int period_id,
+                          microseconds waiting_period) {
+    system_clock::time_point scheduled_time;
+    system_clock::time_point termination_point;
+    if (string_time.find('T') == std::string::npos &&
+        string_time.find('-') == std::string::npos) {
+      auto current_calendar_time = std::time(nullptr);
+      auto tm = *std::localtime(&current_calendar_time);
+      std::ostringstream date_string_stream;
+      date_string_stream << std::put_time(&tm, "%Y-%m-%d");
+      std::string string_date = date_string_stream.str();
+
+      // Initialize the first schedule job for today.
+      scheduled_time = parse_time(string_date + "T" + string_time, "%FT%T");
+      termination_point = parse_time(string_end, "%FT%T");
+    } else {
+      // Initialize the first schedule job.
+      scheduled_time = parse_time(string_time, "%FT%T");
+      termination_point = parse_time(string_end, "%FT%T");
+    }
+
     time_point<system_clock> now = system_clock::now();
+    assert(now <= scheduled_time < termination_point);
+
+    set_termination_point(termination_point);
+    set_period(scheduled_time);
+
     vector<RecurringJob>* jobs_list{};
-    set_period(now + delay);
 
     switch (period_id) {
       // hourly recurrency has id 0
@@ -144,11 +172,12 @@ class AScheduler {
     }
 
     (*jobs_list)
-        .push_back({.scheduled_date = now + delay,
+        .push_back({.scheduled_date = scheduled_time,
                     .termination_point = termination_point,
                     .recurring_job = func,
-                    .thread = std::thread([func, delay, now]() {
-                      std::this_thread::sleep_until(now + delay);
+                    .waiting_period = waiting_period,
+                    .thread = std::thread([func, scheduled_time]() {
+                      std::this_thread::sleep_until(scheduled_time);
                       func();
                     })});
   }
@@ -163,8 +192,7 @@ class AScheduler {
    * @param period: A std::chrono::<time period> element to indicate the waiting
    * time to the first scheduled run.
    */
-  void handle_recurring_vector(vector<RecurringJob>& periodic_jobs_vector,
-                               microseconds period) {
+  void handle_recurring_vector(vector<RecurringJob>& periodic_jobs_vector) {
     time_point<system_clock> now;
     // While iterating over the vector containing the recurring jobs we can not
     // alter the vector we are iterating over. If job must to be rescheduled it
@@ -174,15 +202,15 @@ class AScheduler {
 
     for (int i = 0; i < periodic_jobs_vector.size(); i++) {
       now = system_clock::now();
-      time_point<system_clock> next_scheduled_time = now + period;
+      time_point<system_clock> next_scheduled_time =
+          now + periodic_jobs_vector[i].waiting_period;
+
+      if (periodic_jobs_vector[i].thread.joinable()) {
+        periodic_jobs_vector[i].thread.join();
+      }
 
       // Check if the execution of a job already started.
       if (!(periodic_jobs_vector[i].scheduled_date < now)) {
-        // If the execution started the thread is definetely joinable. Otherwise
-        // something went very wrong.
-        if (periodic_jobs_vector[i].thread.joinable()) {
-          periodic_jobs_vector[i].thread.join();
-        }
         // If another execution can be started before the termination_point it
         // will be scheduled.
         if (next_scheduled_time < periodic_jobs_vector[i].termination_point) {
@@ -201,11 +229,6 @@ class AScheduler {
         periodic_jobs_vector[i] = RecurringJob{};
       }
     }
-
-    // Now that all elements are handled we can try to set our period as it
-    // becomes microseconds(0) at the beginning of each while loop in
-    // handle_schedule.
-    set_period(now + period);
 
     if (!intermediate.empty()) {
       // Move all elements of the intermediate vector to the official vector.
@@ -226,6 +249,12 @@ class AScheduler {
                          return x.scheduled_date == fallback_date;
                        }),
         periodic_jobs_vector.end());
+
+    // We have to find update the smallest period now
+    for (int i = 0; i < periodic_jobs_vector.size(); i++) {
+      now = system_clock::now();
+      set_period(now + periodic_jobs_vector[i].waiting_period);
+    }
   }
 
   /**
@@ -240,6 +269,7 @@ class AScheduler {
   void set_termination_point(const system_clock::time_point& point) {
     if (point > termination_point) {
       termination_point = point;
+      std::cout << termination_point << std::endl;
     }
   }
 
@@ -277,12 +307,11 @@ class AScheduler {
 
     time_point<system_clock> now = system_clock::now();
     while (now < termination_point) {
-      handle_recurring_vector(hourly_jobs, hours(1));
-      handle_recurring_vector(daily_jobs, days(1));
-      handle_recurring_vector(weekly_jobs, weeks(1));
-      handle_recurring_vector(
-          monthly_jobs, months(1));  
-      handle_recurring_vector(yearly_jobs, years(1));
+      handle_recurring_vector(hourly_jobs);
+      handle_recurring_vector(daily_jobs);
+      handle_recurring_vector(weekly_jobs);
+      handle_recurring_vector(monthly_jobs);
+      handle_recurring_vector(yearly_jobs);
       std::this_thread::sleep_until(min_period);
       now = system_clock::now();
     }
@@ -346,160 +375,96 @@ class AScheduler {
    * @brief schedules a task that repeats hourly.
    *
    * @param func: a Job.
-   * @param string_time_point: Time give as string.
+   * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    */
   void schedule_hourly(job func, std::string string_time,
-                       std::string string_end) {
-    // Initialize the first schedule job for today.
-    system_clock::time_point scheduled_time = parse_time(string_time, "%FT%T");
-    system_clock::time_point termination_point =
-        parse_time(string_end, "%FT%T");
-
-    set_termination_point(termination_point);
-    auto now = system_clock::now();
-
-    duration<int, std::micro> delay =
-        duration_cast<microseconds>(scheduled_time - now);
-
-    set_period(now + delay);
-
-    schedule_recurring(func, microseconds(delay.count()), termination_point, 0);
+                       std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 1,
+                       hours(period_multiple));
   }
 
   /**
    * @brief schedules a task that repeats daily.
    *
    * @param func: a Job.
-   * @param string_time_point: Time give as string.
+   * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    */
-  void schedule_daily(job func, std::string string_time,
-                      std::string string_end) {
-    // Get the current date as String to get the ISO timestamp for today.
-    // I want that the user does not has to explicitly state if a task should
-    // start today.
-    auto current_calendar_time = std::time(nullptr);
-    auto tm = *std::localtime(&current_calendar_time);
-    std::ostringstream date_string_stream;
-    date_string_stream << std::put_time(&tm, "%Y-%m-%d");
-    std::string string_date = date_string_stream.str();
-
-    // Initialize the first schedule job for today.
-    system_clock::time_point scheduled_time =
-        parse_time(string_date + "T" + string_time, "%FT%T");
-    system_clock::time_point termination_point =
-        parse_time(string_end, "%FT%T");
-
-    set_termination_point(termination_point);
-    auto now = system_clock::now();
-
-    duration<int, std::micro> delay =
-        duration_cast<microseconds>(scheduled_time - now);
-
-    set_period(now + delay);
-
-    schedule_recurring(func, microseconds(delay.count()), termination_point, 1);
+  void schedule_daily(job func, std::string string_time, std::string string_end,
+                      int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 1, days(period_multiple));
   }
 
   /**
    * @brief schedules a task that repeats weekly.
    *
    * @param func: a Job.
-   * @param string_time_point: Time give as string.
+   * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    */
   void schedule_weekly(job func, std::string string_time,
-                       std::string string_end) {
-    // Initialize the first schedule job.
-    system_clock::time_point scheduled_time = parse_time(string_time, "%FT%T");
-    system_clock::time_point termination_point =
-        parse_time(string_end, "%FT%T");
-
-    set_termination_point(termination_point);
-    auto now = system_clock::now();
-
-    duration<int, std::micro> delay =
-        duration_cast<microseconds>(scheduled_time - now);
-
-    set_period(now + delay);
-
-    schedule_recurring(func, microseconds(delay.count()), termination_point, 2);
+                       std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 2,
+                       weeks(period_multiple));
   }
 
   /**
    * @brief schedules a task that repeats monthly.
    *
    * @param func: a Job.
-   * @param string_time_point: Time give as string.
+   * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    */
   void schedule_monthly(job func, std::string string_time,
-                       std::string string_end) {
-    // Initialize the first schedule job.
-    system_clock::time_point scheduled_time = parse_time(string_time, "%FT%T");
-    system_clock::time_point termination_point =
-        parse_time(string_end, "%FT%T");
-
-    set_termination_point(termination_point);
-    auto now = system_clock::now();
-
-    duration<int, std::micro> delay =
-        duration_cast<microseconds>(scheduled_time - now);
-
-    set_period(now + delay);
-
-    schedule_recurring(func, microseconds(delay.count()), termination_point, 3);
+                        std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 3,
+                       months(period_multiple));
   }
 
   /**
    * @brief schedules a task that repeats yearly.
    *
    * @param func: a Job.
-   * @param string_time_point: Time give as string.
+   * @param string_time: Time give as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    */
   void schedule_yearly(job func, std::string string_time,
-                       std::string string_end) {
-    // Initialize the first schedule job.
-    system_clock::time_point scheduled_time = parse_time(string_time, "%FT%T");
-    system_clock::time_point termination_point =
-        parse_time(string_end, "%FT%T");
-
-    set_termination_point(termination_point);
-    auto now = system_clock::now();
-
-    duration<int, std::micro> delay =
-        duration_cast<microseconds>(scheduled_time - now);
-
-    set_period(now + delay);
-
-    schedule_recurring(func, microseconds(delay.count()), termination_point, 4);
+                       std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 4,
+                       years(period_multiple));
   }
-
 };
 
+std::mutex m;
+
 void test() {
+  m.lock();
   std::cout << "test started" << std::endl;
   std::this_thread::sleep_for(1000ms);
   std::cout << "test works" << std::endl;
+  m.unlock();
 }
 
 void test2() {
+  m.lock();
   std::cout << "test2 started" << std::endl;
   std::this_thread::sleep_for(1000ms);
   std::cout << "test2 works" << std::endl;
+  m.unlock();
 }
 
 void test3() {
+  m.lock();
   std::cout << "test3 started" << std::endl;
   std::this_thread::sleep_for(1000ms);
   std::cout << "test3 works" << std::endl;
+  m.unlock();
 }
 
 int main() {
@@ -509,10 +474,10 @@ int main() {
   // Test the Scheduler class.
   AScheduler scheduler;
 
-  scheduler.schedule_in(test, seconds(5));
+  scheduler.schedule_in(test, seconds(1));
   scheduler.schedule_in(test2, seconds(1));
   scheduler.schedule_in(test3, seconds(10));
-  scheduler.schedule_daily(test, "18:33", "2025-04-06T18:34");
+  scheduler.schedule_daily(test, "10:19", "2025-04-08T10:20", 1);
 
   scheduler.handle_schedule();
 
