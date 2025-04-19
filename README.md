@@ -17,6 +17,10 @@ The complete project uses only the standard libraries of C++20. I recommend usin
 Here are some examples. You can also build `main.cpp` and play around with it. Let `test` be a test function `void test()`:
 
 ```cpp
+#include "aScheduler.h"
+
+AScheduler scheduler;
+
 // function, delay
 scheduler.schedule_in(test, std::chrono::seconds(10));
 

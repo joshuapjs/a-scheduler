@@ -39,7 +39,7 @@ int main() {
   scheduler.schedule_in(test, seconds(1));
   scheduler.schedule_in(test2, seconds(1));
   scheduler.schedule_in(test3, seconds(10));
-  scheduler.schedule_hourly(test, "12:46", "2025-04-08T12:47", 1);
+  scheduler.schedule_hourly(test, "18:19", "2025-04-10T18:20", 1);
 
   scheduler.handle_schedule();
 
