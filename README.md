@@ -1,5 +1,13 @@
 # a-scheduler
 
+- [Overview](#Overview)
+- [Features](#Features)
+- [Prerequisites](#Prerequisites)
+- [Usage](#Usage)
+- [License](#License)
+
+# Overview
+
 A multithreaded job scheduler written in cpp. You can use this single-file library in your project if you want e.g. a function to run at a specific time or even at a recurring basis.
 
  If you can't make it to the other sections of this `README`, please do me a favor and take a look at the examples, the License and adhere to the time format `YYYY-MM-DDTHH:MM:SS`. For that start date, if today's date should be inferred, just give a timestamp of format `HH:MM:SS`.
@@ -10,7 +18,7 @@ A job is defined as a `void` function that does not receive any arguments. You c
 
 # Prerequisites
 
-The complete project uses only the standard libraries of C++20. I recommend using macOS or Linux.
+The complete project uses only the standard libraries of C++20. I compiled the project with clang-1700.0.13.3. 
 
 # Usage
 
@@ -36,7 +44,7 @@ scheduler.schedule_at(test, start);
 scheduler.schedule_hourly(test, "15:01", "2025-04-08T15:01:01", 1);
 ```
 
-I recommend using `std::mutex` to lock the threads during the time they access shared resources. However, I wanted to leave this up to you. Make sure that the start date and time of jobs is not in the past. You are theoretically allowed to run an infinate amount of threads simultaneously so becareful. 
+I recommend using `std::mutex` to lock the threads during the time they access shared resources. However, I wanted to leave this up to you. Make sure that the start time of jobs is not in the past. You are theoretically allowed to run an infinite amount of threads simultaneously so becareful. 
 
 For recurring tasks there will be a check to see if, given the respective waiting period, another run can be started before the termination time point. It is therefore possible that your program runs longer than the termination period. However, if another run does not fit, the program can also run longer than necessary, so set the termination point close to the desired last scheduled run.
 
