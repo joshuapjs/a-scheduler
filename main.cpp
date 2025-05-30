@@ -1,5 +1,5 @@
-#include <mutex>
 #include <iostream>
+#include <mutex>
 
 #include "aScheduler.h"
 
@@ -35,11 +35,14 @@ void test3() {
 int main() {
   const time_point<system_clock> now = system_clock::now();
   AScheduler scheduler;
-
-  scheduler.schedule_in(test, seconds(1));
-  scheduler.schedule_in(test2, seconds(1));
-  scheduler.schedule_in(test3, seconds(10));
-  scheduler.schedule_hourly(test, "18:19", "2025-04-10T18:20", 1);
+  // I recommend to test with your current time + 1 Minute for the first
+  // timestamp as the starting point. As the second one is the termination point
+  // you can set it to current time + 2 min
+  // => test will run every second for 1 Minute in total.
+  scheduler.schedule_secondly(test, "HH:MM", "YYYY-MM-DDTHH:MM", 1);
+  // One example to use schedule_in would be to do some clean_up task after a
+  // recurring task. However, using it independently is also possible.
+  scheduler.schedule_in(test2, seconds(10));
 
   scheduler.handle_schedule();
 

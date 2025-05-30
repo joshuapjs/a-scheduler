@@ -40,25 +40,39 @@ class AScheduler {
     void (*recurring_job)();
   };
 
+  /**
+   * @brief Vector that contains threads holding their scheduled (recurring)
+   * job. Each job repeats every n seconds and has a termination date.
+   */
+  std::vector<RecurringJob> secondly_jobs;
+  /**
+   * @brief Vector that contains threads holding their scheduled (recurring)
+   * job. Each job repeats every n minutes and has a termination date.
+   */
+  std::vector<RecurringJob> minutely_jobs;
+  /**
+   * @brief Vector that contains threads holding their scheduled (recurring)
+   * job. Each job repeats every n hours and has a termination date.
+   */
   std::vector<RecurringJob> hourly_jobs;
   /**
    * @brief Vector that contains threads holding their scheduled (recurring)
-   * job. Each job repeats daily and has a termination date.
+   * job. Each job repeats every n days and has a termination date.
    */
   std::vector<RecurringJob> daily_jobs;
   /**
    * @brief Vector that contains threads holding their scheduled (recurring)
-   * job. Each job repeats weekly and has a termination date.
+   * job. Each job repeats every n weeks and has a termination date.
    */
   std::vector<RecurringJob> weekly_jobs;
   /**
    * @brief Vector that contains threads holding their scheduled (recurring)
-   * job. Each job repeats monthly and has a termination date.
+   * job. Each job repeats every n months and has a termination date.
    */
   std::vector<RecurringJob> monthly_jobs;
   /**
    * @brief Vector that contains threads holding their scheduled (recurring)
-   * job. Each job repeats yearly and has a termination date.
+   * job. Each job repeats every n years and has a termination date.
    */
   std::vector<RecurringJob> yearly_jobs;
   /**
@@ -79,7 +93,7 @@ class AScheduler {
    * Daylight saving time (dst) is not specifically
    * omitted and might be determined by the system.
    *
-   * @param string_time_point: Time give as string.
+   * @param string_time_point: Time given as string.
    * @param forwarded_fmt: The Format to interpret the string correctly, e.g.
    * %FT%T for "2025-04-06T23:14".
    *
@@ -100,7 +114,7 @@ class AScheduler {
    * @brief Handles the initial scheduling of a recurring job.
    *
    * @param func: A Job.
-   * @param string_time: Time give as string.
+   * @param string_time: Time given as string.
    * @param string_end: Time point given as a string indicating the last point
    * of time execution.
    * @param period_id: Integer indicating if the recurrence should be hourly,
@@ -113,6 +127,8 @@ class AScheduler {
                           std::chrono::microseconds waiting_period) {
     std::chrono::system_clock::time_point scheduled_time;
     std::chrono::system_clock::time_point termination_point;
+    // Check if the input string contains only HH:MM:SS
+    // so no specific date using '-' with a designated time after 'T'
     if (string_time.find('T') == std::string::npos &&
         string_time.find('-') == std::string::npos) {
       auto current_calendar_time = std::time(nullptr);
@@ -139,28 +155,38 @@ class AScheduler {
     std::vector<RecurringJob>* jobs_list{};
 
     switch (period_id) {
-      // hourly recurrency has id 0
+      // secondly recurrency has id 0
       case 0:
+        jobs_list = &secondly_jobs;
+        break;
+
+      // minutely recurrance has id 1
+      case 1:
+        jobs_list = &minutely_jobs;
+        break;
+
+      // hourly recurrance has id 2
+      case 2:
         jobs_list = &hourly_jobs;
         break;
 
-      // daily recurrance has id 1
-      case 1:
+      // daily recurrance has id 3
+      case 3:
         jobs_list = &daily_jobs;
         break;
 
-      // weekly recurrance has id 2
-      case 2:
+      // weekly recurrance has id 4
+      case 4:
         jobs_list = &weekly_jobs;
         break;
 
-      // monthly recurrance has id 3
-      case 3:
+      // monthly recurrency has id 0
+      case 5:
         jobs_list = &monthly_jobs;
         break;
 
-      // yearly recurrance has id 4
-      default:
+      // yearly recurrency has id 0
+      case 6:
         jobs_list = &yearly_jobs;
         break;
     }
@@ -202,7 +228,7 @@ class AScheduler {
       }
 
       // Check if the execution of a job already started.
-      if (!(periodic_jobs_vector[i].scheduled_date < now)) {
+      if (periodic_jobs_vector[i].scheduled_date < now) {
         // If another execution can be started before the termination_point it
         // will be scheduled.
         if (next_scheduled_time < periodic_jobs_vector[i].termination_point) {
@@ -217,6 +243,7 @@ class AScheduler {
               .recurring_job = periodic_jobs_vector[i].recurring_job,
           });
         }
+
         // We mark the job as an empty RecurringJob to clean up efficiently.
         periodic_jobs_vector[i] = RecurringJob{};
       }
@@ -300,6 +327,8 @@ class AScheduler {
     std::chrono::time_point<std::chrono::system_clock> now =
         std::chrono::system_clock::now();
     while (now < termination_point) {
+      handle_recurring_vector(secondly_jobs);
+      handle_recurring_vector(minutely_jobs);
       handle_recurring_vector(hourly_jobs);
       handle_recurring_vector(daily_jobs);
       handle_recurring_vector(weekly_jobs);
@@ -310,8 +339,20 @@ class AScheduler {
     }
 
     // It appears that sometimes threads are not joined properly.
-    // At the end of the program I do not expect performance to be critical. I
-    // assume therefore that a clean up of all thread involved does not harm.
+    // Close to termination of the program I do not expect performance to be a critical issue.
+    // I assume therefore that a clean up of all thread involved does not harm.
+    for (int i = 0; i < secondly_jobs.size(); i++) {
+      if (secondly_jobs[i].thread.joinable()) {
+        secondly_jobs[i].thread.join();
+      }
+    }
+
+    for (int i = 0; i < minutely_jobs.size(); i++) {
+      if (minutely_jobs[i].thread.joinable()) {
+        minutely_jobs[i].thread.join();
+      }
+    }
+
     for (int i = 0; i < hourly_jobs.size(); i++) {
       if (hourly_jobs[i].thread.joinable()) {
         hourly_jobs[i].thread.join();
@@ -401,82 +442,114 @@ class AScheduler {
   }
 
   /**
-   * @brief schedules a task that repeats hourly.
+   * @brief schedules a task that repeats every n seconds.
    *
-   * @param func: a Job.
-   * @param string_time: Time give as string.
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
    * @param string_end: Time point given as a string indicating the last point
-   * of time execution.
-   * @param period_multiple: The amount of hours to wait between two runs of a
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of seconds to wait between two runs of a
+   * job.
+   */
+  void schedule_secondly(job func, std::string string_time,
+                       std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 0,
+                       std::chrono::seconds(period_multiple));
+  }
+
+  /**
+   * @brief schedules a task that repeats every n minutes.
+   *
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
+   * @param string_end: Time point given as a string indicating the last point
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of minutes to wait between two runs of a
+   * job.
+   */
+  void schedule_minutely(job func, std::string string_time,
+                       std::string string_end, int period_multiple) {
+    schedule_recurring(func, string_time, string_end, 1,
+                       std::chrono::minutes(period_multiple));
+  }
+
+  /**
+   * @brief schedules a task that repeats every n hours.
+   *
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
+   * @param string_end: Time point given as a string indicating the last point
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of hours to wait between two runs of a
    * job.
    */
   void schedule_hourly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
-    schedule_recurring(func, string_time, string_end, 1,
+    schedule_recurring(func, string_time, string_end, 2,
                        std::chrono::hours(period_multiple));
   }
 
   /**
-   * @brief schedules a task that repeats daily.
+   * @brief schedules a task that repeats every n days.
    *
-   * @param func: a Job.
-   * @param string_time: Time give as string.
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
    * @param string_end: Time point given as a string indicating the last point
-   * of time execution.
-   * @param period_multiple: The amount of hours to wait between two runs of a
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of days to wait between two runs of a
    * job.
    */
   void schedule_daily(job func, std::string string_time, std::string string_end,
                       int period_multiple) {
-    schedule_recurring(func, string_time, string_end, 1,
+    schedule_recurring(func, string_time, string_end, 3,
                        std::chrono::days(period_multiple));
   }
 
   /**
-   * @brief schedules a task that repeats weekly.
+   * @brief schedules a task that repeats every n weeks.
    *
-   * @param func: a Job.
-   * @param string_time: Time give as string.
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
    * @param string_end: Time point given as a string indicating the last point
-   * of time execution.
-   * @param period_multiple: The amount of hours to wait between two runs of a
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of weeks to wait between two runs of a
    * job.
    */
   void schedule_weekly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
-    schedule_recurring(func, string_time, string_end, 2,
+    schedule_recurring(func, string_time, string_end, 4,
                        std::chrono::weeks(period_multiple));
   }
 
   /**
-   * @brief schedules a task that repeats monthly.
+   * @brief schedules a task that repeats every n months.
    *
-   * @param func: a Job.
-   * @param string_time: Time give as string.
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
    * @param string_end: Time point given as a string indicating the last point
-   * of time execution.
-   * @param period_multiple: The amount of hours to wait between two runs of a
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of months to wait between two runs of a
    * job.
    */
   void schedule_monthly(job func, std::string string_time,
                         std::string string_end, int period_multiple) {
-    schedule_recurring(func, string_time, string_end, 3,
+    schedule_recurring(func, string_time, string_end, 5,
                        std::chrono::months(period_multiple));
   }
 
   /**
-   * @brief schedules a task that repeats yearly.
+   * @brief schedules a task that repeats every n years.
    *
-   * @param func: a Job.
-   * @param string_time: Time give as string.
+   * @param func: a Job, given as a void function pointer.
+   * @param string_time: Start time given as string. It is possible to use HH:MM for a start time today or YYYY-MM-DDTHH:MM:SS.
    * @param string_end: Time point given as a string indicating the last point
-   * of time execution.
-   * @param period_multiple: The amount of hours to wait between two runs of a
+   * of time, an execution is allowed to start. The string must adhere to YYYY-MM-DDTHH:MM:SS.
+   * @param period_multiple: The amount n of years to wait between two runs of a
    * job.
    */
   void schedule_yearly(job func, std::string string_time,
                        std::string string_end, int period_multiple) {
-    schedule_recurring(func, string_time, string_end, 4,
+    schedule_recurring(func, string_time, string_end, 6,
                        std::chrono::years(period_multiple));
   }
 };

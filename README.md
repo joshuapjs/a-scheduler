@@ -18,7 +18,7 @@ A job is defined as a `void` function that does not receive any arguments. You c
 
 # Prerequisites
 
-The complete project uses only the standard libraries of C++20. I compiled the project with clang-1700.0.13.3. 
+The complete project uses only the standard libraries of C++20. I compiled the project with clang-1700.0.13.3 and g++-14. 
 
 # Usage
 
