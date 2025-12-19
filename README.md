@@ -18,11 +18,12 @@ A job is defined as a `void` function that does not receive any arguments. You c
 
 # Prerequisites
 
-The complete project uses only the standard libraries of C++20. I compiled the project with clang-1700.0.13.3 and g++-14. 
+The complete project uses only the standard libraries of C++20. I compiled the project with clang-1700.0.13.3 and g++-14. Make sure to install `catch2` for testing.
 
 # Usage
 
-Here are some examples. You can also build `main.cpp` and play around with it. Let `test` be a test function `void test()`:
+You can build `example.cpp` to compile some examples and get started (`CMakeLists.txt` included).
+Here are more examples how you could use the library. Let `func` be a test function `void func()`:
 
 ```cpp
 #include "aScheduler.h"
@@ -30,21 +31,21 @@ Here are some examples. You can also build `main.cpp` and play around with it. L
 AScheduler scheduler;
 
 // function, delay
-scheduler.schedule_in(test, std::chrono::seconds(10));
+scheduler.schedule_in(func, std::chrono::seconds(10));
 
 // function, start time
-scheduler.schedule_at(test, "2025-04-08T15:01:01");
+scheduler.schedule_at(func, "2025-04-08T15:01:01");
 
 // specific time points are supported.
 std::system_clock::time_point start = std::system_clock::now() + std::chrono::seconds(42);
 // function, std::time_point
-scheduler.schedule_at(test, start);
+scheduler.schedule_at(func, start);
 
 // function, start time, termination time, amount of hours
-scheduler.schedule_hourly(test, "15:01", "2025-04-08T15:01:01", 1);
+scheduler.schedule_hourly(func, "15:01", "2025-04-08T15:01:01", 1);
 ```
 
-I recommend using `std::mutex` to lock the threads during the time they access shared resources. However, I wanted to leave this up to you. Make sure that the start time of jobs is not in the past. You are theoretically allowed to run an infinite amount of threads simultaneously so becareful. 
+Make sure that the start time of jobs is not in the past. You are theoretically allowed to run an infinite amount of threads simultaneously so becareful. 
 
 For recurring tasks there will be a check to see if, given the respective waiting period, another run can be started before the termination time point. It is therefore possible that your program runs longer than the termination period. However, if another run does not fit, the program can also run longer than necessary, so set the termination point close to the desired last scheduled run.
 
