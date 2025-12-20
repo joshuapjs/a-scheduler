@@ -95,11 +95,11 @@ class AScheduler {
    *
    * @param string_time_point: Time given as string.
    * @param forwarded_fmt: The Format to interpret the string correctly, e.g.
-   * %FT%T for "2025-04-06T23:14".
+   * %Y-%m-%dT%H:%M:%S for "2025-04-06T23:14".
    *
    */
   std::chrono::system_clock::time_point parse_time(
-      std::string string_time_point, std::string forwarded_fmt) {
+    std::string string_time_point, std::string forwarded_fmt) {
     std::tm tm = {};
     // This will allow for detection if Daylight Saving Time is
     tm.tm_isdst = -1;
@@ -138,12 +138,11 @@ class AScheduler {
       std::string string_date = date_string_stream.str();
 
       // Initialize the first schedule job for today.
-      scheduled_time = parse_time(string_date + "T" + string_time, "%FT%T");
-      termination_point = parse_time(string_end, "%FT%T");
+      scheduled_time = parse_time(string_date + "T" + string_time, "%Y-%m-%dT%H:%M:%S");
+      termination_point = parse_time(string_end, "%Y-%m-%dT%H:%M:%S");
     } else {
-      // Initialize the first schedule job.
-      scheduled_time = parse_time(string_time, "%FT%T");
-      termination_point = parse_time(string_end, "%FT%T");
+      scheduled_time = parse_time(string_time, "%Y-%m-%dT%H:%M:%S");
+      termination_point = parse_time(string_end, "%Y-%m-%dT%H:%M:%S");
     }
 
     std::chrono::time_point<std::chrono::system_clock> now =
@@ -228,6 +227,7 @@ class AScheduler {
       }
 
       // Check if the execution of a job already started.
+
       if (periodic_jobs_vector[i].scheduled_date < now) {
         // If another execution can be started before the termination_point it
         // will be scheduled.
@@ -240,6 +240,7 @@ class AScheduler {
               }),
               .termination_point = periodic_jobs_vector[i].termination_point,
               .scheduled_date = next_scheduled_time,
+              .waiting_period = periodic_jobs_vector[i].waiting_period,
               .recurring_job = periodic_jobs_vector[i].recurring_job,
           });
         }
